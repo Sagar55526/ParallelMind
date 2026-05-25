@@ -1,0 +1,48 @@
+# ParallelMind local infrastructure.
+#
+# Why two services?
+#   - Redis is our IN-FLIGHT state: the queue, soon-to-be pub/sub, ephemeral counters.
+#     It's fast (in-memory) and lossy if misconfigured — perfect for "what's happening right now".
+#   - Postgres is our DURABLE record: every task that ever existed, its final status,
+#     its execution log. Survives restarts.
+#
+# Healthchecks matter: workers shouldn't try to connect before the DB is ready,
+# or you'll get spurious "connection refused" errors on first boot.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: parallelmind-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: parallelmind-postgres
+    environment:
+      POSTGRES_USER: parallelmind
+      POSTGRES_PASSWORD: parallelmind
+      POSTGRES_DB: parallelmind
+    # Host port 5434 (container's 5432) — avoids conflicts with system Postgres
+    # instances commonly on 5432 / 5433.
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parallelmind -d parallelmind"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  redis_data:
+  postgres_data:
