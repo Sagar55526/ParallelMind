@@ -6,22 +6,6 @@ ParallelMind is a learning-driven, production-inspired execution engine — conc
 
 ---
 
-## Status
-
-**Phase 1 — Core queue + worker pool** ✅ **complete**
-
-| Phase | Focus | Status |
-|-------|-------|--------|
-| 1 | Core queue + worker pool, FastAPI surface, Postgres persistence | ✅ |
-| 2 | Retry system + failure handling | ⏳ |
-| 3 | Thread + asyncio hybrid runtime | ⏳ |
-| 4 | Monitoring dashboard | ⏳ |
-| 5 | Adaptive concurrency | ⏳ |
-| 6 | Distributed workers | ⏳ |
-| 7 | AI-agent orchestration | ⏳ |
-
----
-
 ## Architecture (Phase 1)
 
 ```
