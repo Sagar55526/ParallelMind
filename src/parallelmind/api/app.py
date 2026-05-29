@@ -5,7 +5,9 @@ from fastapi import FastAPI
 from parallelmind.api.routes import tasks as tasks_routes
 from parallelmind.config import get_settings
 from parallelmind.dispatcher import Dispatcher
-from parallelmind.executors.base import ExecutorRegistry
+from parallelmind.executors.backends import AsyncBackend, ProcessBackend, ThreadBackend
+from parallelmind.executors.cpu_bound import PrimeCountExecutor
+from parallelmind.executors.registry import ExecutorRegistry
 from parallelmind.executors.simulated import SimulatedIOExecutor
 from parallelmind.models import TaskKind
 from parallelmind.observability.logging import configure_logging, get_logger
@@ -25,7 +27,6 @@ async def lifespan(app: FastAPI):
     engine = make_engine(settings.database_url)
     sessionmaker = make_sessionmaker(engine)
 
-    # Create tables if they don't exist. Phase 1 only; Phase 2 will use Alembic.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -35,11 +36,17 @@ async def lifespan(app: FastAPI):
         max_connections=settings.async_worker_count + 8,
     )
 
+    # Phase 3: each TaskKind is wired to a (executor, backend) pair.
+    # See docs/concepts/04-gil-threads-processes.md for the decision tree.
     registry = ExecutorRegistry()
+    async_backend = AsyncBackend()
+    process_backend = ProcessBackend(max_workers=4)
+
     sim = SimulatedIOExecutor()
-    registry.register(TaskKind.IO_SIMULATED, sim)
-    registry.register(TaskKind.LLM_CALL, sim)
-    registry.register(TaskKind.TOOL_CALL, sim)
+    registry.register(TaskKind.IO_SIMULATED, sim, async_backend)
+    registry.register(TaskKind.LLM_CALL, sim, async_backend)
+    registry.register(TaskKind.TOOL_CALL, sim, async_backend)
+    registry.register(TaskKind.CPU_BOUND, PrimeCountExecutor(), process_backend)
 
     async def persist_on_finished(task):
         async with sessionmaker() as session:
@@ -57,6 +64,7 @@ async def lifespan(app: FastAPI):
     app.state.sessionmaker = sessionmaker
     app.state.queue = queue
     app.state.dispatcher = dispatcher
+    app.state.registry = registry
 
     await dispatcher.start()
     log.info("app_started", workers=settings.async_worker_count)
@@ -66,6 +74,8 @@ async def lifespan(app: FastAPI):
     finally:
         log.info("app_shutting_down")
         await dispatcher.stop()
+        for backend in registry.backends():
+            await backend.close()
         await queue.close()
         await engine.dispose()
 

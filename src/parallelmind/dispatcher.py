@@ -1,6 +1,6 @@
 import asyncio
 
-from parallelmind.executors.base import ExecutorRegistry
+from parallelmind.executors.registry import ExecutorRegistry
 from parallelmind.observability.logging import get_logger
 from parallelmind.queue.base import TaskQueue
 from parallelmind.workers.async_worker import run_worker

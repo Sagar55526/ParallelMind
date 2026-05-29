@@ -1,29 +1,25 @@
 from typing import Any
 
-from parallelmind.models import Task, TaskKind
+from parallelmind.models import Task
 
 
 class ExecutorError(Exception):
     """Raised by an executor when the task fails for a domain-level reason."""
 
 
-class TaskExecutor:
-    """Subclasses override execute()."""
+class AsyncTaskExecutor:
+    """Implement when the work is async-native (uses await internally)."""
 
     async def execute(self, task: Task) -> Any:
         raise NotImplementedError
 
 
-class ExecutorRegistry:
-    """Dispatch table: TaskKind -> TaskExecutor."""
+class SyncTaskExecutor:
+    """Implement when the work is blocking — sync IO or pure CPU.
 
-    def __init__(self) -> None:
-        self._by_kind: dict[TaskKind, TaskExecutor] = {}
+    Required to be picklable if used with ProcessBackend (no closures, no
+    references to non-importable objects).
+    """
 
-    def register(self, kind: TaskKind, executor: TaskExecutor) -> None:
-        self._by_kind[kind] = executor
-
-    def resolve(self, kind: TaskKind) -> TaskExecutor:
-        if kind not in self._by_kind:
-            raise ExecutorError(f"no executor registered for kind={kind}")
-        return self._by_kind[kind]
+    def execute(self, task: Task) -> Any:
+        raise NotImplementedError

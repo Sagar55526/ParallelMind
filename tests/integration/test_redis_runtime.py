@@ -5,7 +5,8 @@ import uuid
 import pytest
 
 from parallelmind.dispatcher import Dispatcher
-from parallelmind.executors.base import ExecutorRegistry
+from parallelmind.executors.backends import AsyncBackend
+from parallelmind.executors.registry import ExecutorRegistry
 from parallelmind.executors.simulated import SimulatedIOExecutor
 from parallelmind.models import Task, TaskKind, TaskStatus
 from parallelmind.queue.redis_queue import RedisTaskQueue
@@ -39,7 +40,7 @@ async def test_put_get_roundtrip_via_redis(queue):
 
 async def test_dispatcher_processes_many_tasks(queue):
     registry = ExecutorRegistry()
-    registry.register(TaskKind.IO_SIMULATED, SimulatedIOExecutor())
+    registry.register(TaskKind.IO_SIMULATED, SimulatedIOExecutor(), AsyncBackend())
 
     finished: list[Task] = []
     finished_evt = asyncio.Event()
@@ -67,7 +68,7 @@ async def test_dispatcher_processes_many_tasks(queue):
 
 async def test_failed_executor_records_failure(queue):
     registry = ExecutorRegistry()
-    registry.register(TaskKind.IO_SIMULATED, SimulatedIOExecutor())
+    registry.register(TaskKind.IO_SIMULATED, SimulatedIOExecutor(), AsyncBackend())
 
     seen: list[Task] = []
     done = asyncio.Event()

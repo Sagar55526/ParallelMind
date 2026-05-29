@@ -2,11 +2,11 @@ import asyncio
 import random
 from typing import Any
 
-from parallelmind.executors.base import ExecutorError, TaskExecutor
+from parallelmind.executors.base import AsyncTaskExecutor, ExecutorError
 from parallelmind.models import Task
 
 
-class SimulatedIOExecutor(TaskExecutor):
+class SimulatedIOExecutor(AsyncTaskExecutor):
     """Sleeps for payload['duration_ms'] (default 50ms) to mimic an IO-bound call."""
 
     async def execute(self, task: Task) -> Any:

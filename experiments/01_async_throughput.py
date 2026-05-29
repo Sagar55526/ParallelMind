@@ -17,7 +17,8 @@ import time
 import uuid
 
 from parallelmind.dispatcher import Dispatcher
-from parallelmind.executors.base import ExecutorRegistry
+from parallelmind.executors.backends import AsyncBackend
+from parallelmind.executors.registry import ExecutorRegistry
 from parallelmind.executors.simulated import SimulatedIOExecutor
 from parallelmind.models import Task, TaskKind
 from parallelmind.observability.logging import configure_logging
@@ -34,7 +35,7 @@ async def run_one(num_tasks: int, duration_ms: int, worker_count: int) -> dict:
     queue = RedisTaskQueue.from_url(REDIS_URL, queue_name, max_connections=worker_count + 8)
 
     registry = ExecutorRegistry()
-    registry.register(TaskKind.IO_SIMULATED, SimulatedIOExecutor())
+    registry.register(TaskKind.IO_SIMULATED, SimulatedIOExecutor(), AsyncBackend())
 
     finished = 0
     done_evt = asyncio.Event()
