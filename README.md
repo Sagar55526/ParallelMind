@@ -137,17 +137,6 @@ Sample results (50ms tasks, local Redis):
 | 250     | 0.35     | 2862             | 57% (knee) |
 | 500     | 0.37     | 2700             | 27%        |
 
-See [`docs/concepts/01-event-loop.md`](docs/concepts/01-event-loop.md) §9 for the interpretation.
-
----
-
-## Documentation
-
-- [Concept Brief #1 — Event loop & asyncio](docs/concepts/01-event-loop.md)
-- [Concept Brief #2 — Redis as a queue](docs/concepts/02-redis-queue.md)
-- [Concept Brief #3 — Async SQLAlchemy & FastAPI lifespan](docs/concepts/03-async-db-and-fastapi.md)
-- Blueprint PDF — full system design at the repo root
-
 ---
 
 ## Project layout
@@ -177,5 +166,3 @@ Two goals, equally weighted:
 
 1. **Engineer** a scalable concurrent runtime for AI workloads.
 2. **Understand** what's actually happening under the hood — the GIL, the event loop, lock contention, backpressure, scheduling, the cost of process boundaries.
-
-Each phase ships a concept brief in [`docs/concepts/`](docs/concepts/) — the why, not just the what.
