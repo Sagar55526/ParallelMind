@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -31,5 +29,5 @@ class TaskResponse(BaseModel):
     finished_at: datetime | None
 
     @classmethod
-    def from_domain(cls, t: Task) -> TaskResponse:
+    def from_domain(cls, t: Task) -> "TaskResponse":
         return cls(**t.model_dump())

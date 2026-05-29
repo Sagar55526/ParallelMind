@@ -1,18 +1,13 @@
-from __future__ import annotations
-
-import asyncio
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from parallelmind.api.routes import tasks as tasks_routes
 from parallelmind.config import get_settings
 from parallelmind.dispatcher import Dispatcher
 from parallelmind.executors.base import ExecutorRegistry
 from parallelmind.executors.simulated import SimulatedIOExecutor
-from parallelmind.models import Task, TaskKind
+from parallelmind.models import TaskKind
 from parallelmind.observability.logging import configure_logging, get_logger
 from parallelmind.queue.redis_queue import RedisTaskQueue
 from parallelmind.storage.db import make_engine, make_sessionmaker
@@ -22,27 +17,15 @@ from parallelmind.storage.task_repo import TaskRepo
 log = get_logger(__name__)
 
 
-def _make_persistence_hook(sessionmaker: async_sessionmaker):
-    """Returns an on_finished hook that upserts task state to Postgres."""
-
-    async def _hook(task: Task) -> None:
-        async with sessionmaker() as session:
-            await TaskRepo(session).upsert(task)
-
-    def hook(task: Task) -> asyncio.Future[None]:
-        return asyncio.ensure_future(_hook(task))
-
-    return hook
-
-
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI):
     settings = get_settings()
     configure_logging(level=settings.log_level)
 
     engine = make_engine(settings.database_url)
     sessionmaker = make_sessionmaker(engine)
 
+    # Create tables if they don't exist. Phase 1 only; Phase 2 will use Alembic.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -53,15 +36,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     registry = ExecutorRegistry()
-    registry.register(TaskKind.IO_SIMULATED, SimulatedIOExecutor())
-    registry.register(TaskKind.LLM_CALL, SimulatedIOExecutor())
-    registry.register(TaskKind.TOOL_CALL, SimulatedIOExecutor())
+    sim = SimulatedIOExecutor()
+    registry.register(TaskKind.IO_SIMULATED, sim)
+    registry.register(TaskKind.LLM_CALL, sim)
+    registry.register(TaskKind.TOOL_CALL, sim)
+
+    async def persist_on_finished(task):
+        async with sessionmaker() as session:
+            await TaskRepo(session).upsert(task)
 
     dispatcher = Dispatcher(
         queue,
         registry,
         worker_count=settings.async_worker_count,
-        on_finished=_make_persistence_hook(sessionmaker),
+        on_finished=persist_on_finished,
         poll_timeout=1.0,
     )
 
@@ -87,7 +75,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks_routes.router)
 
     @app.get("/healthz")
-    async def healthz() -> dict[str, str]:
+    async def healthz():
         return {"status": "ok"}
 
     return app

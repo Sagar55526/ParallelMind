@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import random
 from typing import Any
@@ -9,12 +7,7 @@ from parallelmind.models import Task
 
 
 class SimulatedIOExecutor(TaskExecutor):
-    """Sleeps for `payload.duration_ms` (default 50ms) to mimic an IO-bound call.
-
-    Optional payload knobs:
-      - duration_ms: int
-      - fail_probability: float in [0, 1] — for exercising the failure path
-    """
+    """Sleeps for payload['duration_ms'] (default 50ms) to mimic an IO-bound call."""
 
     async def execute(self, task: Task) -> Any:
         duration_ms = int(task.payload.get("duration_ms", 50))

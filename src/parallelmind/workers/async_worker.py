@@ -1,29 +1,21 @@
-from __future__ import annotations
-
 import asyncio
-from collections.abc import Callable
 
 from parallelmind.executors.base import ExecutorRegistry
-from parallelmind.models import Task, TaskStatus
+from parallelmind.models import TaskStatus
 from parallelmind.observability.logging import get_logger
 from parallelmind.queue.base import QueueEmpty, TaskQueue
 
 log = get_logger(__name__)
-
-# Callback signature: invoked after each terminal transition so the dispatcher
-# (or tests) can observe execution without coupling the worker to a repo.
-TaskHook = Callable[[Task], "asyncio.Future[None] | None"]
 
 
 async def run_worker(
     worker_id: str,
     queue: TaskQueue,
     registry: ExecutorRegistry,
-    *,
     poll_timeout: float = 1.0,
-    on_finished: TaskHook | None = None,
+    on_finished=None,  # async (Task) -> None
 ) -> None:
-    """Single worker loop: get → execute → update state → repeat until cancelled."""
+    """Single worker loop: get -> execute -> update state -> repeat until cancelled."""
     wlog = log.bind(worker=worker_id)
     wlog.info("worker_started")
 
@@ -45,8 +37,7 @@ async def run_worker(
                 task.transition_to(TaskStatus.SUCCESS)
                 tlog.info("task_success")
             except asyncio.CancelledError:
-                # Worker is shutting down. Don't mark task SUCCESS/FAILED —
-                # leave it RUNNING so the recovery path (Phase 2) can re-queue.
+                # Shutting down — leave the task in RUNNING for Phase 2 recovery.
                 tlog.warning("task_cancelled_mid_run")
                 raise
             except Exception as exc:
@@ -54,9 +45,7 @@ async def run_worker(
                 tlog.exception("task_failed")
 
             if on_finished is not None:
-                maybe = on_finished(task)
-                if maybe is not None:
-                    await maybe
+                await on_finished(task)
     except asyncio.CancelledError:
         wlog.info("worker_cancelled")
         raise

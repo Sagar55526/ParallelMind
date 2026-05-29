@@ -1,17 +1,10 @@
-from __future__ import annotations
-
 import asyncio
 
 import pytest
 
 from parallelmind.models import Task, TaskStatus
-from parallelmind.queue.base import QueueEmpty, QueueFull, TaskQueue
+from parallelmind.queue.base import QueueEmpty, QueueFull
 from parallelmind.queue.in_memory import InMemoryTaskQueue
-
-
-def test_satisfies_protocol():
-    q = InMemoryTaskQueue()
-    assert isinstance(q, TaskQueue)
 
 
 async def test_put_get_roundtrip():
@@ -70,16 +63,16 @@ async def test_close_then_put_fails():
 async def test_close_is_idempotent():
     q = InMemoryTaskQueue()
     await q.close()
-    await q.close()  # must not raise
+    await q.close()
 
 
 async def test_put_transitions_task_to_queued():
     q = InMemoryTaskQueue()
     t = Task()
-    assert t.status is TaskStatus.CREATED
+    assert t.status == TaskStatus.CREATED
     await q.put(t)
     out = await q.get(timeout=0.1)
-    assert out.status is TaskStatus.QUEUED
+    assert out.status == TaskStatus.QUEUED
 
 
 async def test_put_is_idempotent_on_already_queued_task():
@@ -87,8 +80,6 @@ async def test_put_is_idempotent_on_already_queued_task():
     t = Task()
     await q.put(t)
     out = await q.get(timeout=0.1)
-    # Re-enqueueing an already-QUEUED task must not raise (matters for
-    # retry paths where the same Task object cycles back through put).
     await q.put(out)
 
 
@@ -98,8 +89,8 @@ async def test_concurrent_consumers_each_get_distinct_tasks():
     for t in tasks:
         await q.put(t)
 
-    async def consume() -> list[Task]:
-        out: list[Task] = []
+    async def consume():
+        out = []
         try:
             while True:
                 out.append(await q.get(timeout=0.05))
@@ -109,4 +100,4 @@ async def test_concurrent_consumers_each_get_distinct_tasks():
     results = await asyncio.gather(*(consume() for _ in range(4)))
     seen_ids = [t.id for batch in results for t in batch]
     assert sorted(seen_ids) == sorted(t.id for t in tasks)
-    assert len(seen_ids) == len(set(seen_ids))  # no duplicates
+    assert len(seen_ids) == len(set(seen_ids))

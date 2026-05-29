@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 
 from parallelmind.models import Task, TaskStatus
@@ -14,9 +12,8 @@ class InMemoryTaskQueue(TaskQueue):
     async def put(self, task: Task) -> None:
         if self._closed:
             raise RuntimeError("queue is closed")
-        # The queue owns the → QUEUED transition: anything physically in the
-        # queue is, by definition, QUEUED. Idempotent if already QUEUED.
-        if task.status is not TaskStatus.QUEUED:
+        # The queue owns the -> QUEUED transition.
+        if task.status != TaskStatus.QUEUED:
             task.transition_to(TaskStatus.QUEUED)
         try:
             self._q.put_nowait(task)

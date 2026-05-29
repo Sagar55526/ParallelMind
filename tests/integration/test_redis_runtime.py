@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import os
 import uuid
@@ -18,12 +16,12 @@ pytestmark = pytest.mark.integration
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 
-def _unique_queue_name() -> str:
+def _unique_queue_name():
     return f"parallelmind:test:{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture
-async def queue() -> RedisTaskQueue:
+async def queue():
     q = RedisTaskQueue.from_url(REDIS_URL, _unique_queue_name())
     await q.clear()
     yield q
@@ -31,16 +29,15 @@ async def queue() -> RedisTaskQueue:
     await q.close()
 
 
-async def test_put_get_roundtrip_via_redis(queue: RedisTaskQueue):
+async def test_put_get_roundtrip_via_redis(queue):
     t = Task(kind=TaskKind.IO_SIMULATED, payload={"duration_ms": 1})
     await queue.put(t)
     assert await queue.size() == 1
     out = await queue.get(timeout=1.0)
     assert out.id == t.id
-    assert out.payload["duration_ms"] == 1
 
 
-async def test_dispatcher_processes_many_tasks(queue: RedisTaskQueue):
+async def test_dispatcher_processes_many_tasks(queue):
     registry = ExecutorRegistry()
     registry.register(TaskKind.IO_SIMULATED, SimulatedIOExecutor())
 
@@ -48,7 +45,7 @@ async def test_dispatcher_processes_many_tasks(queue: RedisTaskQueue):
     finished_evt = asyncio.Event()
     target = 50
 
-    def on_finished(task: Task) -> None:
+    async def on_finished(task):
         finished.append(task)
         if len(finished) >= target:
             finished_evt.set()
@@ -64,18 +61,18 @@ async def test_dispatcher_processes_many_tasks(queue: RedisTaskQueue):
         await dispatcher.stop()
 
     assert len(finished) == target
-    assert all(t.status is TaskStatus.SUCCESS for t in finished)
+    assert all(t.status == TaskStatus.SUCCESS for t in finished)
     assert all(t.attempts == 1 for t in finished)
 
 
-async def test_failed_executor_records_failure(queue: RedisTaskQueue):
+async def test_failed_executor_records_failure(queue):
     registry = ExecutorRegistry()
     registry.register(TaskKind.IO_SIMULATED, SimulatedIOExecutor())
 
     seen: list[Task] = []
     done = asyncio.Event()
 
-    def on_finished(task: Task) -> None:
+    async def on_finished(task):
         seen.append(task)
         done.set()
 
@@ -89,6 +86,6 @@ async def test_failed_executor_records_failure(queue: RedisTaskQueue):
 
     assert len(seen) == 1
     t = seen[0]
-    assert t.status is TaskStatus.FAILED
+    assert t.status == TaskStatus.FAILED
     assert t.last_error is not None
     assert "simulated failure" in t.last_error

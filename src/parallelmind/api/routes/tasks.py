@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -25,11 +23,10 @@ async def create_task(
         priority=body.priority,
         max_attempts=body.max_attempts,
     )
-    # Persist first (durable record), then enqueue (hand off to runtime),
-    # then persist again to reflect the QUEUED state. If the LPUSH fails,
-    # the row is left as CREATED — recoverable, not lost.
+    # Persist first (durable record), then enqueue (status -> QUEUED), then persist again.
+    # If LPUSH fails the row stays CREATED — recoverable.
     await repo.insert(task)
-    await queue.put(task)  # mutates task.status -> QUEUED
+    await queue.put(task)
     await repo.upsert(task)
     return TaskResponse.from_domain(task)
 
@@ -44,8 +41,6 @@ async def get_task(task_id: UUID, repo: TaskRepo = Depends(get_repo)) -> TaskRes
 
 
 @router.get("", response_model=list[TaskResponse])
-async def list_tasks(
-    limit: int = 50, repo: TaskRepo = Depends(get_repo)
-) -> list[TaskResponse]:
+async def list_tasks(limit: int = 50, repo: TaskRepo = Depends(get_repo)) -> list[TaskResponse]:
     tasks = await repo.list_recent(limit=limit)
     return [TaskResponse.from_domain(t) for t in tasks]

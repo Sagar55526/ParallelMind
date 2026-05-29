@@ -1,25 +1,22 @@
-from __future__ import annotations
-
 import asyncio
 
 from parallelmind.executors.base import ExecutorRegistry
 from parallelmind.observability.logging import get_logger
 from parallelmind.queue.base import TaskQueue
-from parallelmind.workers.async_worker import TaskHook, run_worker
+from parallelmind.workers.async_worker import run_worker
 
 log = get_logger(__name__)
 
 
 class Dispatcher:
-    """Owns a pool of N async workers consuming from a single queue."""
+    """Owns N async workers consuming from a single queue."""
 
     def __init__(
         self,
         queue: TaskQueue,
         registry: ExecutorRegistry,
         worker_count: int,
-        *,
-        on_finished: TaskHook | None = None,
+        on_finished=None,  # async (Task) -> None
         poll_timeout: float = 1.0,
     ) -> None:
         if worker_count < 1:
@@ -29,7 +26,7 @@ class Dispatcher:
         self._worker_count = worker_count
         self._on_finished = on_finished
         self._poll_timeout = poll_timeout
-        self._workers: list[asyncio.Task[None]] = []
+        self._workers: list[asyncio.Task] = []
         self._running = False
 
     async def start(self) -> None:
@@ -51,7 +48,7 @@ class Dispatcher:
         ]
         log.info("dispatcher_started", workers=self._worker_count)
 
-    async def stop(self, grace_period: float = 5.0) -> None:
+    async def stop(self) -> None:
         if not self._running:
             return
         self._running = False
@@ -59,14 +56,15 @@ class Dispatcher:
         for w in self._workers:
             w.cancel()
 
+        # gather() with return_exceptions=True so one bad worker doesn't mask the others.
         results = await asyncio.gather(*self._workers, return_exceptions=True)
-        unexpected = [
-            r for r in results if isinstance(r, BaseException) and not isinstance(r, asyncio.CancelledError)
-        ]
+        unexpected = 0
+        for r in results:
+            if isinstance(r, Exception) and not isinstance(r, asyncio.CancelledError):
+                log.exception("worker_failed_during_shutdown", error=str(r))
+                unexpected += 1
         self._workers = []
-        log.info("dispatcher_stopped", unexpected_errors=len(unexpected))
-        if unexpected:
-            raise ExceptionGroup("worker errors during shutdown", unexpected)
+        log.info("dispatcher_stopped", unexpected_errors=unexpected)
 
     @property
     def is_running(self) -> bool:

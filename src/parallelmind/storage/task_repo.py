@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from uuid import UUID
 
 from sqlalchemy import select
@@ -14,7 +12,7 @@ class TaskNotFound(Exception):
 
 
 class TaskRepo:
-    """Async CRUD for Task rows. One repo per session — sessions are not shared."""
+    """Async CRUD for Task rows. One repo per session."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -30,7 +28,6 @@ class TaskRepo:
         return row.to_domain()
 
     async def upsert(self, task: Task) -> None:
-        """Update an existing row from the domain object. Insert if missing."""
         row = await self._session.get(TaskRow, task.id)
         if row is None:
             self._session.add(TaskRow.from_domain(task))

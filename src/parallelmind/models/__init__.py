@@ -3,7 +3,6 @@ from parallelmind.models.enums import (
     TERMINAL_STATES,
     TaskKind,
     TaskStatus,
-    is_transition_allowed,
 )
 from parallelmind.models.task import IllegalTransitionError, Task
 
@@ -14,5 +13,4 @@ __all__ = [
     "Task",
     "TaskKind",
     "TaskStatus",
-    "is_transition_allowed",
 ]

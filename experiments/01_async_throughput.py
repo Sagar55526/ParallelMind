@@ -5,12 +5,10 @@ Usage:
     python experiments/01_async_throughput.py --tasks 2000 --duration-ms 100 --workers 1,5,10,50,100,500
 
 What to observe:
-    - Throughput climbs ~linearly with worker count while we're IO-bound (waiting on asyncio.sleep)
-    - Throughput plateaus once Redis round-trip / pool contention dominates
-    - The KNEE of that curve is where adding workers stops paying for itself
+    - Throughput climbs ~linearly with worker count while we're IO-bound.
+    - Throughput plateaus once Redis round-trip / pool contention dominates.
+    - The KNEE of that curve is where adding workers stops paying for itself.
 """
-from __future__ import annotations
-
 import argparse
 import asyncio
 import os
@@ -41,9 +39,9 @@ async def run_one(num_tasks: int, duration_ms: int, worker_count: int) -> dict:
     finished = 0
     done_evt = asyncio.Event()
     completion_times: list[float] = []
-    start: float = 0.0
+    start = 0.0
 
-    def on_finished(_task: Task) -> None:
+    async def on_finished(_task):
         nonlocal finished
         finished += 1
         completion_times.append(time.perf_counter() - start)
@@ -54,7 +52,7 @@ async def run_one(num_tasks: int, duration_ms: int, worker_count: int) -> dict:
         queue, registry, worker_count=worker_count, on_finished=on_finished, poll_timeout=0.2
     )
 
-    # Pre-load the queue so workers start with a full backlog (steady-state measurement).
+    # Pre-load the queue so workers start with a full backlog (steady-state).
     for _ in range(num_tasks):
         await queue.put(Task(kind=TaskKind.IO_SIMULATED, payload={"duration_ms": duration_ms}))
 
@@ -72,6 +70,11 @@ async def run_one(num_tasks: int, duration_ms: int, worker_count: int) -> dict:
     ideal = num_tasks * (duration_ms / 1000) / worker_count
     efficiency = (ideal / wall_clock) * 100
 
+    p95 = (
+        statistics.quantiles(completion_times, n=20)[18]
+        if len(completion_times) >= 20 else completion_times[-1]
+    )
+
     return {
         "workers": worker_count,
         "wall_clock_s": wall_clock,
@@ -79,16 +82,15 @@ async def run_one(num_tasks: int, duration_ms: int, worker_count: int) -> dict:
         "ideal_wall_clock_s": ideal,
         "efficiency_pct": efficiency,
         "p50_completion_s": statistics.median(completion_times),
-        "p95_completion_s": statistics.quantiles(completion_times, n=20)[18]
-            if len(completion_times) >= 20 else completion_times[-1],
+        "p95_completion_s": p95,
     }
 
 
-def _parse_workers(s: str) -> list[int]:
+def _parse_workers(s):
     return [int(x.strip()) for x in s.split(",") if x.strip()]
 
 
-def _print_row(r: dict) -> None:
+def _print_row(r):
     print(
         f"{r['workers']:>7} | "
         f"{r['wall_clock_s']:>10.3f} | "
@@ -100,7 +102,7 @@ def _print_row(r: dict) -> None:
     )
 
 
-async def main() -> None:
+async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--tasks", type=int, default=1000)
     parser.add_argument("--duration-ms", type=int, default=50)
@@ -109,8 +111,7 @@ async def main() -> None:
 
     print(
         f"\nExperiment 01: Async throughput sweep\n"
-        f"  tasks={args.tasks}  duration_ms={args.duration_ms}  "
-        f"workers={args.workers}\n"
+        f"  tasks={args.tasks}  duration_ms={args.duration_ms}  workers={args.workers}\n"
         f"  ideal serial time = {args.tasks * args.duration_ms / 1000:.1f}s\n"
     )
     print(f"{'workers':>7} | {'wall(s)':>10} | {'tps':>10} | {'ideal(s)':>9} | {'eff':>8} | {'p50(s)':>7} | {'p95(s)':>7}")

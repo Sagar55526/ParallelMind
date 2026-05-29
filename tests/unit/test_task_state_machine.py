@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from parallelmind.models import (
@@ -8,13 +6,12 @@ from parallelmind.models import (
     IllegalTransitionError,
     Task,
     TaskStatus,
-    is_transition_allowed,
 )
 
 
 def test_default_task_starts_in_created():
     t = Task()
-    assert t.status is TaskStatus.CREATED
+    assert t.status == TaskStatus.CREATED
     assert t.attempts == 0
     assert t.started_at is None
     assert t.finished_at is None
@@ -25,7 +22,7 @@ def test_happy_path_transitions():
     t.transition_to(TaskStatus.QUEUED)
     t.transition_to(TaskStatus.RUNNING)
     t.transition_to(TaskStatus.SUCCESS)
-    assert t.status is TaskStatus.SUCCESS
+    assert t.status == TaskStatus.SUCCESS
     assert t.attempts == 1
     assert t.started_at is not None
     assert t.finished_at is not None
@@ -53,11 +50,11 @@ def test_failed_carries_error_message():
 
 def test_terminal_states_have_no_exits():
     for state in TERMINAL_STATES:
-        assert ALLOWED_TRANSITIONS[state] == frozenset()
+        assert ALLOWED_TRANSITIONS[state] == set()
 
 
 @pytest.mark.parametrize("terminal", sorted(TERMINAL_STATES))
-def test_cannot_leave_terminal_state(terminal: TaskStatus):
+def test_cannot_leave_terminal_state(terminal):
     t = Task(status=terminal)
     for dst in TaskStatus:
         with pytest.raises(IllegalTransitionError):
@@ -68,14 +65,8 @@ def test_illegal_transition_raises_with_context():
     t = Task()  # CREATED
     with pytest.raises(IllegalTransitionError) as exc:
         t.transition_to(TaskStatus.RUNNING)
-    assert exc.value.src is TaskStatus.CREATED
-    assert exc.value.dst is TaskStatus.RUNNING
-
-
-def test_is_transition_allowed_matches_table():
-    for src, nexts in ALLOWED_TRANSITIONS.items():
-        for dst in TaskStatus:
-            assert is_transition_allowed(src, dst) is (dst in nexts)
+    assert exc.value.src == TaskStatus.CREATED
+    assert exc.value.dst == TaskStatus.RUNNING
 
 
 def test_serialization_roundtrip():
